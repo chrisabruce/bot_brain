@@ -2,9 +2,9 @@
 
 #include <Adafruit_Sensor.h>
 #include <Adafruit_LSM303_U.h>
-#include <Adafruit_BMP085_U.h>
-#include <Adafruit_L3GD20_U.h>
-#include <Adafruit_10DOF.h>
+//#include <Adafruit_BMP085_U.h>
+//#include <Adafruit_L3GD20_U.h>
+//#include <Adafruit_10DOF.h>
 
 #define USE_OCTOWS2811
 #include<OctoWS2811.h>
@@ -15,7 +15,7 @@
 
 /* Assign a unique ID to the sensors */
 Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
-Adafruit_L3GD20_Unified       gyro  = Adafruit_L3GD20_Unified(20);
+//Adafruit_L3GD20_Unified       gyro  = Adafruit_L3GD20_Unified(20);
 
 boolean wasBumped = false;
 unsigned long bumpedAt;
@@ -29,6 +29,8 @@ unsigned long bumpedAt;
 
 #define DEFAULT_BRIGHTNESS 200
 #define MAX_BRIGHTNESS 255
+
+#define SENSOR_READ_TIMER 1000
 
 
 CRGB leds[NUM_STRIPS * NUM_LEDS_PER_STRIP];
@@ -54,9 +56,9 @@ void setup(void) {
 
   /* Initialise the sensors */
   accel.begin();
-  gyro.begin();
+  //gyro.begin();
 
-  sensorTimer.begin(scheduleSensorRead, 1000);
+  sensorTimer.begin(scheduleSensorRead, SENSOR_READ_TIMER);
 
   LEDS.addLeds<OCTOWS2811>(leds, NUM_LEDS_PER_STRIP);
   LEDS.setBrightness(DEFAULT_BRIGHTNESS);
@@ -83,20 +85,6 @@ void readSensors(void) {
     bumpedAt = millis();
     Serial.print("Bumped: "); Serial.println(bumpedAt);
   }
-
-  //  Serial.print(F("ACCEL "));
-  //  Serial.print("X: "); Serial.print(event.acceleration.x); Serial.print("  ");
-  //  Serial.print("Y: "); Serial.print(event.acceleration.y); Serial.print("  ");
-  //  Serial.print("Z: "); Serial.print(event.acceleration.z); Serial.print("  "); Serial.println("m/s^2 ");
-
-  /* Display the results (gyrocope values in rad/s) */
-  gyro.getEvent(&event);
-  //  Serial.print(F("GYRO  "));
-  //  Serial.print("X: "); Serial.print(event.gyro.x); Serial.print("  ");
-  //  Serial.print("Y: "); Serial.print(event.gyro.y); Serial.print("  ");
-  //  Serial.print("Z: "); Serial.print(event.gyro.z); Serial.print("  ");Serial.println("rad/s ");
-
-  //Serial.println(F(""));
   noInterrupts()
   shouldReadSensors = false;
   interrupts();
@@ -154,36 +142,6 @@ double agitatedPercent() {
 void randomizeLeds(int rangeLow, int rangeHigh, CRGB color) {
   int i = random8(rangeLow, rangeHigh);
   if (i < NUM_LEDS) leds[i] = color;
-}
-
-void displaySensorDetails(void)
-{
-  sensor_t sensor;
-
-  accel.getSensor(&sensor);
-  Serial.println(F("----------- ACCELEROMETER ----------"));
-  Serial.print  (F("Sensor:       ")); Serial.println(sensor.name);
-  Serial.print  (F("Driver Ver:   ")); Serial.println(sensor.version);
-  Serial.print  (F("Unique ID:    ")); Serial.println(sensor.sensor_id);
-  Serial.print  (F("Max Value:    ")); Serial.print(sensor.max_value); Serial.println(F(" m/s^2"));
-  Serial.print  (F("Min Value:    ")); Serial.print(sensor.min_value); Serial.println(F(" m/s^2"));
-  Serial.print  (F("Resolution:   ")); Serial.print(sensor.resolution); Serial.println(F(" m/s^2"));
-  Serial.println(F("------------------------------------"));
-  Serial.println(F(""));
-
-  gyro.getSensor(&sensor);
-  Serial.println(F("------------- GYROSCOPE -----------"));
-  Serial.print  (F("Sensor:       ")); Serial.println(sensor.name);
-  Serial.print  (F("Driver Ver:   ")); Serial.println(sensor.version);
-  Serial.print  (F("Unique ID:    ")); Serial.println(sensor.sensor_id);
-  Serial.print  (F("Max Value:    ")); Serial.print(sensor.max_value); Serial.println(F(" rad/s"));
-  Serial.print  (F("Min Value:    ")); Serial.print(sensor.min_value); Serial.println(F(" rad/s"));
-  Serial.print  (F("Resolution:   ")); Serial.print(sensor.resolution); Serial.println(F(" rad/s"));
-  Serial.println(F("------------------------------------"));
-  Serial.println(F(""));
-
-
-  delay(500);
 }
 
 // Interrupt Handler to schedule sensor reads
