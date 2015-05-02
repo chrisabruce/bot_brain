@@ -25,56 +25,13 @@ unsigned long bumpedAt;
 /* LEDS */
 #define NUM_LEDS_PER_STRIP 28
 #define NUM_STRIPS 6
+#define NUM_LEDS 168
 
-#define kMatrixWidth  28
-#define kMatrixHeight 6
-#define kMatrixSerpentineLayout  false
-
-#define DEFAULT_BRIGHTNESS 128
+#define DEFAULT_BRIGHTNESS 200
 #define MAX_BRIGHTNESS 255
 
 
 CRGB leds[NUM_STRIPS * NUM_LEDS_PER_STRIP];
-
-
-// x,y, & time values
-uint32_t x,y,v_time,hue_time,hxy;
-
-// Play with the values of the variables below and see what kinds of effects they
-// have!  More octaves will make things slower.
-
-#define DEFAULT_OCTAVES 1
-#define DEFAULT_HUE_OCTAVES 2
-#define DEFAULT_XSCALE 57771
-#define DEFAULT_YSCALE 57771
-#define DEFAULT_HUE_SCALE 1
-#define DEFAULT_TIME_SPEED 1111
-#define DEFAULT_HUE_SPEED 31
-#define DEFAULT_X_SPEED 331
-#define DEFAULT_Y_SPEED 1111
-
-
-
-// how many octaves to use for the brightness and hue functions
-uint8_t octaves=1;
-uint8_t hue_octaves=2;
-
-// the 'distance' between points on the x and y axis
-int xscale=57771;
-int yscale=57771;
-
-// the 'distance' between x/y points for the hue noise
-int hue_scale=1;
-
-// how fast we move through time & hue noise
-int time_speed=1111;
-int hue_speed=0;
-
-// adjust these values to move along the x or y axis between frames
-int x_speed=331;
-int y_speed=1111;
-
-
 
 /* TEMP Sensors */
 #define ONE_WIRE_BUS 2
@@ -84,6 +41,120 @@ DallasTemperature tempSensors(&oneWire);
 /* Timers */
 IntervalTimer sensorTimer;
 volatile boolean shouldReadSensors = true;
+
+void setup(void) {
+  //Serial.begin(115200);
+  //Serial.println(F("Starting")); Serial.println("");
+
+  //  int ledPin = 13;
+  //  pinMode(ledPin, OUTPUT);
+  //  digitalWrite(ledPin, HIGH);
+
+  // delay(500);
+
+  /* Initialise the sensors */
+  accel.begin();
+  gyro.begin();
+
+  sensorTimer.begin(scheduleSensorRead, 1000);
+
+  LEDS.addLeds<OCTOWS2811>(leds, NUM_LEDS_PER_STRIP);
+  LEDS.setBrightness(DEFAULT_BRIGHTNESS);
+}
+
+void loop(void) {
+  if (shouldReadSensors) {
+    readSensors();
+  }
+
+  //Serial.println(F("Starting")); Serial.println("");
+  synapse();
+}
+
+void readSensors(void) {
+  /* Get a new sensor event */
+  sensors_event_t event;
+
+  /* Display the results (acceleration is measured in m/s^2) */
+  accel.getEvent(&event);
+  wasBumped = event.acceleration.x > BUMP_THRESHOLD || event.acceleration.y > BUMP_THRESHOLD || event.acceleration.z > BUMP_THRESHOLD;
+
+  if (wasBumped) {
+    bumpedAt = millis();
+    Serial.print("Bumped: "); Serial.println(bumpedAt);
+  }
+
+  //  Serial.print(F("ACCEL "));
+  //  Serial.print("X: "); Serial.print(event.acceleration.x); Serial.print("  ");
+  //  Serial.print("Y: "); Serial.print(event.acceleration.y); Serial.print("  ");
+  //  Serial.print("Z: "); Serial.print(event.acceleration.z); Serial.print("  "); Serial.println("m/s^2 ");
+
+  /* Display the results (gyrocope values in rad/s) */
+  gyro.getEvent(&event);
+  //  Serial.print(F("GYRO  "));
+  //  Serial.print("X: "); Serial.print(event.gyro.x); Serial.print("  ");
+  //  Serial.print("Y: "); Serial.print(event.gyro.y); Serial.print("  ");
+  //  Serial.print("Z: "); Serial.print(event.gyro.z); Serial.print("  ");Serial.println("rad/s ");
+
+  //Serial.println(F(""));
+  noInterrupts()
+  shouldReadSensors = false;
+  interrupts();
+}
+
+
+
+
+void synapse() {
+  double percentage = agitatedPercent();
+
+  int leftRangeLow = 0;
+  int leftRangeHigh = 83;
+  int rightRangeLow = 84;
+  int rightRangeHigh = 167;
+  int delayTime = 100;
+
+  int randomThresholdLeft = leftRangeHigh;
+  int randomThresholdRight = rightRangeHigh;
+
+  int brightness = DEFAULT_BRIGHTNESS;
+
+  CRGB color = CRGB::White;
+
+  if (percentage > 0) {
+    randomThresholdLeft;
+    randomThresholdRight;
+    color = CRGB::Red;
+
+    delayTime = 50.0 * (1 - percentage);
+    brightness = (brightness * percentage);
+  }
+
+  randomizeLeds(leftRangeLow, randomThresholdLeft, color);
+  randomizeLeds(rightRangeLow, randomThresholdRight, color);
+
+
+  for (int j = 0; j < NUM_LEDS; j++) leds[j].fadeToBlackBy(random8(32, 128));
+  LEDS.setBrightness(brightness);
+  LEDS.show();
+  delay(delayTime);
+}
+
+double agitatedPercent() {
+  double percentage = 0;
+  unsigned long elapsedTime = (millis() - bumpedAt);
+  if (bumpedAt > 0 && elapsedTime < BUMP_DURATION) {
+    percentage = 1.0 - (double(elapsedTime) / double(BUMP_DURATION));
+  } else {
+    bumpedAt = 0;
+  }
+  return percentage;
+}
+
+void randomizeLeds(int rangeLow, int rangeHigh, CRGB color) {
+  int i = random8(rangeLow, rangeHigh);
+  if (i < NUM_LEDS) leds[i] = color;
+}
 
 void displaySensorDetails(void)
 {
@@ -115,73 +186,6 @@ void displaySensorDetails(void)
   delay(500);
 }
 
-void setup(void)
-{
-  // initialize the x/y and time values
-  random16_set_seed(8934);
-  random16_add_entropy(analogRead(3));
-  hxy = (uint32_t)((uint32_t)random16() << 16) + (uint32_t)random16();
-  x = (uint32_t)((uint32_t)random16() << 16) + (uint32_t)random16();
-  y = (uint32_t)((uint32_t)random16() << 16) + (uint32_t)random16();
-  v_time = (uint32_t)((uint32_t)random16() << 16) + (uint32_t)random16();
-  hue_time = (uint32_t)((uint32_t)random16() << 16) + (uint32_t)random16();
-
-  delay(500);
-  
-  /* Initialise the sensors */
-   accel.begin();
-   gyro.begin();
-
-  sensorTimer.begin(scheduleSensorRead, 1000);
-
-  LEDS.addLeds<OCTOWS2811>(leds, NUM_LEDS_PER_STRIP);
-  LEDS.setBrightness(DEFAULT_BRIGHTNESS);
-}
-
-void loop(void)
-{
-  if (shouldReadSensors) {
-    readSensors();
-  }
-
-  noise();
-
-
-}
-
-void readSensors(void)
-{
-  /* Get a new sensor event */
-  sensors_event_t event;
-
-  /* Display the results (acceleration is measured in m/s^2) */
-  accel.getEvent(&event);
-  wasBumped = event.acceleration.x > BUMP_THRESHOLD || event.acceleration.y > BUMP_THRESHOLD || event.acceleration.z > BUMP_THRESHOLD;
-  
-  if (wasBumped) {
-    bumpedAt = millis();
-    //Serial.print("Bumped: "); Serial.println(bumpedAt);
-  }
-  
-//  Serial.print(F("ACCEL "));
-//  Serial.print("X: "); Serial.print(event.acceleration.x); Serial.print("  ");
-//  Serial.print("Y: "); Serial.print(event.acceleration.y); Serial.print("  ");
-//  Serial.print("Z: "); Serial.print(event.acceleration.z); Serial.print("  "); Serial.println("m/s^2 ");
-
-  /* Display the results (gyrocope values in rad/s) */
-  gyro.getEvent(&event);
-  //  Serial.print(F("GYRO  "));
-  //  Serial.print("X: "); Serial.print(event.gyro.x); Serial.print("  ");
-  //  Serial.print("Y: "); Serial.print(event.gyro.y); Serial.print("  ");
-  //  Serial.print("Z: "); Serial.print(event.gyro.z); Serial.print("  ");Serial.println("rad/s ");
-
-  //Serial.println(F(""));
-  noInterrupts()
-  shouldReadSensors = false;
-  interrupts();
-}
-
-
 // Interrupt Handler to schedule sensor reads
 void scheduleSensorRead(void)
 {
@@ -190,78 +194,4 @@ void scheduleSensorRead(void)
   }
 }
 
-void noise(void) {
-  LEDS.setBrightness(getBrightness());
-  
-    // fill the led array 2/16-bit noise values
-  fill_2dnoise16(LEDS.leds(), kMatrixWidth, kMatrixHeight, kMatrixSerpentineLayout,
-                octaves,x,xscale,y,yscale,v_time,
-                hue_octaves,hxy,hue_scale,hxy,hue_scale,hue_time, true);
-
-  LEDS.show();
-
-  // adjust the intra-frame time values
-  x += x_speed;
-  y += y_speed;
-  v_time += time_speed;
-  hue_time += hue_speed;
-}
-
-void synapse(void)
-{
-  int ledNums = random8(56);
-  for (int i = 0; i < ledNums; i++) {
-    int aLed = random8(NUM_STRIPS * NUM_LEDS_PER_STRIP);
-    leds[aLed] = CRGB::Gray;
-  }
-  LEDS.show();
-  LEDS.delay(100);
-  LEDS.clear(true);
-  LEDS.show();
-
-}
-void hueRainbow(void)
-{
-  LEDS.setBrightness(getBrightness());
-  
-  static uint8_t hue = 0;
-  for (int i = 0; i < NUM_STRIPS; i++) {
-    for (int j = 0; j < NUM_LEDS_PER_STRIP; j++) {
-      leds[(i * NUM_LEDS_PER_STRIP) + j] = CHSV((32 * i) + hue + j, 192, 255);
-    }
-  }
-
-  // Set the first n leds on each strip to show which strip it is
-//  for (int i = 0; i < NUM_STRIPS; i++) {
-//    for (int j = 0; j <= i; j++) {
-//      leds[(i * NUM_LEDS_PER_STRIP) + j] = CRGB::Red;
-//    }
-//  }
-
-  hue++;
-
-  LEDS.show();
-  LEDS.delay(10);
-}
-
-int getBrightness(void) {
-  unsigned long elapsedTime = (millis() - bumpedAt);
-  int brightness = DEFAULT_BRIGHTNESS;
-  
-  if (bumpedAt > 0 && elapsedTime < BUMP_DURATION) {
-    double percentage = 1.0 - (double(elapsedTime) / double(BUMP_DURATION));
-    //Serial.println(percentage);
-    brightness = DEFAULT_BRIGHTNESS + (percentage * (MAX_BRIGHTNESS - DEFAULT_BRIGHTNESS));
-    hue_scale = 5;
-    time_speed = 5555;
-  } else {
-    hue_scale = 1;
-    time_speed = 1111;
-    bumpedAt = 0;
-  }
-  
-  //Serial.print("BumpedAt: "); Serial.print(brightness); Serial.print(" "); Serial.println(elapsedTime);
-  
-  return brightness;
-}
 
